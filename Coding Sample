@@ -1,0 +1,79 @@
+###This section of code summarizes each day of data to for use in predictive models.
+
+dailyData$Day <- ymd(dailyData$Day) #format Date
+
+c=1 #create counter
+
+#iterate through each turbine and day, finding the value of each variable for that instance
+for (t in 1:length(turbines)) {
+  for (d in 1:length(days)) {
+    dailyData$Day[c] <- date(days[d])
+    dailyData$Turbine[c] <- turbines[t]
+    
+    #subsets to the current instance (turbine and date)
+    today <- data[which(date(data$Time) == date(days[d]) & data$Turbine %in% turbines[t]),]
+    
+    dailyData$MaxGenRPM[c] <- max(today$GenRPM) 
+    dailyData$MinGenRPM[c] <- min(today$GenRPM)
+    dailyData$MaxBearingIMS1[c] <- max(today$BearingIMS1) 
+    dailyData$MinBearingIMS1[c] <- min(today$BearingIMS1)
+    dailyData$MaxBearingIMS2[c] <- max(today$BearingIMS2) 
+    dailyData$MinBearingIMS2[c] <- min(today$BearingIMS2)
+    dailyData$MaxHP[c] <- max(today$HP)  
+    dailyData$MinHP[c] <- min(today$HP)
+    dailyData$MaxGenRPM[c] <- max(today$GenRPM)
+    dailyData$MinGenRPM[c] <- min(today$GenRPM)
+    dailyData$MaxBearingHS[c] <- max(today$BearingHS) 
+    dailyData$MinBearingHS[c] <- min(today$BearingHS)
+    dailyData$MaxOilTemp[c] <- max(today$OilTemp)  
+    dailyData$MinOilTemp[c] <- min(today$OilTemp)
+    dailyData$MaxActivePower[c] <- max(today$ActivePower)  
+    dailyData$MinActivePower[c] <- min(today$ActivePower)
+    dailyData$MaxGust[c] <- max(today$MaxGust)
+    dailyData$MinTemp[c] <- min(today$MinTemp)
+    dailyData$MaxTemp[c] <- max(today$MaxTemp)
+    dailyData$MinRH[c] <- min(today$MinRH)
+    dailyData$MaxRH[c] <- max(today$MaxRH)
+    
+    #creates dataset for the next day, identifies if a balance of plant error occurs the following day, and makes a binary variable to identify this
+    tom <- data[which(date(data$Time) == date(days[d+1]) & data$Turbine %in% turbines[t]),]
+    dailyData$BoPerror[c] <- ifelse('Balance of Plant' %in% tom$ErrorType, 1, 0)
+    
+    print(c) 
+    c = c+1 #counts instance
+  }
+}
+
+
+### This section compares two different random forest models, using visual and numeric methods to compare them
+
+#future forest
+pi_hat <- predict(myforest2_future, test.df.future, type = 'prob')[,'Error'] #predictions
+rocCurve <- roc(response = test.df.future$futureBoPerrors, #creates ROC curve
+                predictor = pi_hat,
+                levels = c('NoError', 'Error'))
+
+plot(rocCurve, print.thres=TRUE, print.auc = TRUE) #plots ROC curve
+
+#extract the pi_star
+pi_star <- coords(rocCurve, "best", ret = 'threshold')$threshold[1]
+test.df.future$forest_pred <- as.factor(ifelse(pi_hat > pi_star, 'Error', 'NoError')) #use pi star
+
+table(test.df.future$forest_pred, test.df.future$futureBoPerrors) #confusion matrix
+
+#daily forest
+pi_hat <- predict(myforest1_daily, test.df.daily, type = 'prob')[,'Error'] #predictions
+rocCurve <- roc(response = test.df.daily$BoPerror, #ROC curve
+                predictor = pi_hat,
+                levels = c('NoError', 'Error'))
+
+plot(rocCurve, print.thres=TRUE, print.auc = TRUE) #Print ROC curve
+
+#extract the pi_star 
+pi_star <- coords(rocCurve, "best", ret = 'threshold')$threshold[1]
+test.df.daily$forest_pred <- as.factor(ifelse(pi_hat > pi_star, 'Error', 'NoError')) #use pi star
+
+table(test.df.daily$forest_pred, test.df.daily$BoPerror) #confusion matrix
+
+
+
